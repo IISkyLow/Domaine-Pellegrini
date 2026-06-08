@@ -1387,10 +1387,11 @@ tr:hover td { background: rgba(245,239,230,0.03); }
               <th>Catégorie</th>
               <th>Note</th>
               <th>Montant</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="txTable">
-            <tr><td colspan="6"><div class="empty-state"><p>Aucune transaction enregistrée.</p></div></td></tr>
+            <tr><td colspan="7"><div class="empty-state"><p>Aucune transaction enregistrée.</p></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1416,7 +1417,7 @@ tr:hover td { background: rgba(245,239,230,0.03); }
               <option value="grappa">Grappa Pellegrini</option>
               <option value="raisin_kg">Raisin (kg)</option>
               <option value="bouteille_vide">Bouteilles vides</option>
-              <option value="barrique">Barriques de chêne</option>
+              <option value="verre">Verres</option>
             </select>
           </div>
           <div>
@@ -1513,14 +1514,45 @@ tr:hover td { background: rgba(245,239,230,0.03); }
     <div class="page" id="page-prix">
       <div class="section-header">
         <div class="section-title">Tarifs & Carte des Vins</div>
-        <div class="section-sub">Modifier les noms, prix au verre et à la bouteille</div>
+        <div class="section-sub">Ajouter, modifier ou supprimer les produits de la carte</div>
       </div>
 
+      <!-- Formulaire ajout nouveau produit -->
+      <div class="panel">
+        <div class="panel-title">Ajouter un Nouveau Produit</div>
+        <div class="form-row">
+          <div>
+            <label class="form-label">Nom du produit</label>
+            <input type="text" class="form-input" id="newProdName" placeholder="ex: Pellegrini Pétillant">
+          </div>
+          <div>
+            <label class="form-label">Millésime</label>
+            <input type="text" class="form-input" id="newProdVintage" placeholder="ex: 2023 ou N/V">
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label class="form-label">Prix au Verre ($)</label>
+            <input type="number" class="form-input" id="newProdGlass" placeholder="0" min="0">
+          </div>
+          <div>
+            <label class="form-label">Prix Bouteille ($)</label>
+            <input type="number" class="form-input" id="newProdBottle" placeholder="0" min="0">
+          </div>
+          <div style="grid-column: span 1">
+            <label class="form-label">Description</label>
+            <input type="text" class="form-input" id="newProdDesc" placeholder="Notes de dégustation...">
+          </div>
+        </div>
+        <button class="btn-action" onclick="addProduct()" style="margin-top:8px;">Ajouter à la Carte</button>
+      </div>
+
+      <!-- Liste des produits existants -->
       <div class="panel" id="pricePanel">
-        <div class="panel-title">Édition de la Carte — Nom · Prix au verre · Prix bouteille</div>
+        <div class="panel-title">Carte Actuelle — Modifier les produits</div>
         <div id="priceList"></div>
         <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap:wrap;">
-          <button class="btn-action" onclick="savePrices()">Sauvegarder</button>
+          <button class="btn-action" onclick="savePrices()">Sauvegarder les modifications</button>
           <button class="btn-secondary" onclick="navigateTo('public')">Voir la vitrine</button>
         </div>
       </div>
@@ -1597,7 +1629,7 @@ tr:hover td { background: rgba(245,239,230,0.03); }
 
         <div style="margin-top: 24px; display: flex; gap: 12px; justify-content: center;">
           <button class="btn-secondary" onclick="window.print()">Imprimer le Rapport</button>
-          <button class="btn-action" onclick="exportRecap()">Exporter (.txt)</button>
+          <button class="btn-action" onclick="exportRecap()">Exporter (.pdf)</button>
         </div>
       </div>
     </div>
@@ -1612,6 +1644,7 @@ tr:hover td { background: rgba(245,239,230,0.03); }
 <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
 </div><!-- /app -->
 
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // =============================================
@@ -1644,16 +1677,16 @@ let STATE = {
 
 const DEFAULT_STOCKS = {
   pellegrini_rouge: 240, pellegrini_blanc: 180, pellegrini_rose: 320,
-  cuvee_don: 48, grappa: 95, raisin_kg: 1200, bouteille_vide: 500, barrique: 12
+  cuvee_don: 48, grappa: 95, raisin_kg: 1200, bouteille_vide: 500, verre: 200
 };
 
 const STOCK_LABELS = {
   pellegrini_rouge: 'Rouge Grand Cru', pellegrini_blanc: 'Blanc de Blancs',
   pellegrini_rose: 'Rosé d\'Exception', cuvee_don: 'Cuvée Don Elio',
-  grappa: 'Grappa', raisin_kg: 'Raisin', bouteille_vide: 'Bouteilles vides', barrique: 'Barriques'
+  grappa: 'Grappa', raisin_kg: 'Raisin', bouteille_vide: 'Bouteilles vides', verre: 'Verres'
 };
 
-const STOCK_UNITS = { raisin_kg: 'kg', barrique: 'unités', bouteille_vide: 'unités' };
+const STOCK_UNITS = { raisin_kg: 'kg', verre: 'unités', bouteille_vide: 'unités' };
 
 // =============================================
 // SUPABASE — CHARGEMENT DONNÉES
@@ -2086,7 +2119,7 @@ function renderTxTable() {
   const tbody = document.getElementById('txTable');
   if (!tbody) return;
   if (STATE.transactions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>Aucune transaction enregistrée.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>Aucune transaction enregistrée.</p></div></td></tr>';
     return;
   }
   tbody.innerHTML = STATE.transactions.map(t => `
@@ -2099,8 +2132,19 @@ function renderTxTable() {
       <td style="font-family:'Cormorant Garamond',serif; font-size:18px; color:${t.type==='entree'?'#7dc97d':'#e87878'}">
         ${t.type==='entree'?'+':'-'}$${t.amount.toLocaleString()}
       </td>
+      <td>${STATE.role === 'patron' ? `<button class="btn-danger" onclick="deleteTransaction(${t.id})">✕</button>` : ''}</td>
     </tr>
   `).join('');
+}
+
+async function deleteTransaction(id) {
+  if (!confirm('Supprimer cette transaction ?')) return;
+  const { error } = await sb.from('transactions').delete().eq('id', id);
+  if (error) { showToast('Erreur lors de la suppression.', false); return; }
+  STATE.transactions = STATE.transactions.filter(t => t.id !== id);
+  renderStats();
+  renderTxTable();
+  showToast('Transaction supprimée.', true);
 }
 
 // =============================================
@@ -2140,7 +2184,7 @@ async function addStock() {
 function renderStockLevels() {
   const el = document.getElementById('stockLevels');
   if (!el) return;
-  const maxes = { pellegrini_rouge:500, pellegrini_blanc:400, pellegrini_rose:500, cuvee_don:100, grappa:200, raisin_kg:3000, bouteille_vide:1000, barrique:30 };
+  const maxes = { pellegrini_rouge:500, pellegrini_blanc:400, pellegrini_rose:500, cuvee_don:100, grappa:200, raisin_kg:3000, bouteille_vide:1000, verre:1000 };
   el.innerHTML = `<div class="panel-title">Inventaire Actuel</div>` +
     Object.entries(STATE.stocks).map(([k, v]) => {
       const max = maxes[k] || 1000;
@@ -2189,17 +2233,250 @@ async function addEmployee() {
   const data = await saveEmployee({ name, role, salary: salary || 0 });
   if (!data) return;
 
-  STATE.employees.push({ id: data.id, name, role, salary: salary||0, hiredDate: data.created_at });
+  const emp = { id: data.id, name, role, salary: salary||0, hiredDate: data.created_at };
+  STATE.employees.push(emp);
   renderEmployees();
   document.getElementById('empName').value = '';
   document.getElementById('empSalary').value = '';
-  showToast(`${name} engagé(e) comme ${ROLE_LABELS[role]}.`, true);
+  showToast(`${name} engagé(e) — contrat généré.`, true);
+
+  // Générer le contrat PDF automatiquement
+  generateContrat(emp);
 }
 
 const ROLE_LABELS = {
   vigneron: 'Vigneron', caviste: 'Caviste', commercial: 'Commercial',
   securite: 'Sécurité', chauffeur: 'Chauffeur', comptable: 'Comptable', directeur: 'Directeur de Domaine'
 };
+
+function generateContratById(id) {
+  const emp = STATE.employees.find(e => String(e.id) === String(id));
+  if (!emp) { showToast('Employé introuvable.', false); return; }
+  generateContrat(emp);
+}
+
+function generateContrat(emp) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210;
+  const margin = 22;
+  const dateEmbauche = new Date(emp.hiredDate || new Date()).toLocaleDateString('fr-FR', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+  const dateStr = new Date(emp.hiredDate || new Date()).toLocaleDateString('fr-FR');
+
+  // Couleurs
+  const gold   = [201, 168, 76];
+  const dark   = [45, 9, 18];
+  const cream  = [245, 239, 230];
+  const mid    = [140, 96, 112];
+  const light  = [200, 180, 190];
+
+  // ── FOND ──
+  doc.setFillColor(...dark);
+  doc.rect(0, 0, W, 297, 'F');
+
+  // Bordures latérales décoratives
+  doc.setFillColor(...gold);
+  doc.rect(0, 0, 4, 297, 'F');
+  doc.rect(W - 4, 0, 4, 297, 'F');
+  doc.rect(4, 0, W - 8, 2, 'F');
+  doc.rect(4, 295, W - 8, 2, 'F');
+
+  // Ligne or intérieure
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.3);
+  doc.rect(8, 6, W - 16, 285);
+
+  let y = 20;
+
+  // ── EN-TÊTE ──
+  doc.setFontSize(7);
+  doc.setTextColor(...gold);
+  doc.setFont('helvetica', 'normal');
+  doc.text('✦  DOMAINE PELLEGRINI  ✦  LOS SANTOS  ✦  FONDÉ EN 1987  ✦', W / 2, y, { align: 'center' });
+  y += 10;
+
+  doc.setFontSize(24);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...gold);
+  doc.text('CONTRAT DE TRAVAIL', W / 2, y, { align: 'center' });
+  y += 7;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...mid);
+  doc.text('Contrat à durée indéterminée — Droit du travail de San Andreas', W / 2, y, { align: 'center' });
+  y += 8;
+
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, W - margin, y);
+  y += 10;
+
+  // ── PARTIES ──
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...gold);
+  doc.text('ENTRE LES SOUSSIGNÉS', margin, y);
+  y += 7;
+
+  // Employeur
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...cream);
+  doc.text('L\'EMPLOYEUR :', margin, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...light);
+  doc.setFontSize(8.5);
+  const employeur = [
+    'Raison sociale : Domaine Pellegrini S.A.R.L.',
+    'Siège social : 47 Vineyard Road, Blaine County, Los Santos',
+    'Représentée par : Giovanni Pellegrini',
+    'N° SIRET LS : 987 654 321 00042',
+  ];
+  employeur.forEach(line => { doc.text(line, margin + 4, y); y += 5; });
+  y += 4;
+
+  // Séparateur
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.15);
+  doc.line(margin + 10, y, W - margin - 10, y);
+  y += 6;
+
+  // Employé
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...cream);
+  doc.text('L\'EMPLOYÉ(E) :', margin, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...light);
+  doc.setFontSize(8.5);
+  const salarie = [
+    `Nom complet : ${emp.name}`,
+    `Poste : ${ROLE_LABELS[emp.role] || emp.role}`,
+    `Date d'embauche : ${dateEmbauche}`,
+  ];
+  salarie.forEach(line => { doc.text(line, margin + 4, y); y += 5; });
+  y += 6;
+
+  // ── ARTICLES ──
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, W - margin, y);
+  y += 8;
+
+  const articles = [
+    {
+      titre: 'ARTICLE 1 — ENGAGEMENT ET POSTE',
+      corps: [
+        `Le Domaine Pellegrini engage ${emp.name} en qualité de ${ROLE_LABELS[emp.role]||emp.role},`,
+        `à compter du ${dateStr}, pour une durée indéterminée.`,
+        `L'employé(e) exercera ses fonctions au sein du Domaine Pellegrini, situé au`,
+        `47 Vineyard Road, Blaine County, Los Santos, et dans tout lieu désigné par la Direction.`,
+      ]
+    },
+    {
+      titre: 'ARTICLE 2 — RÉMUNÉRATION',
+      corps: [
+        `En contrepartie de ses fonctions, l'employé(e) percevra une rémunération`,
+        `hebdomadaire brute de $${(emp.salary||0).toLocaleString()}, versée chaque semaine.`,
+        `Cette rémunération pourra être révisée annuellement par la Direction.`,
+      ]
+    },
+    {
+      titre: 'ARTICLE 3 — DURÉE DU TRAVAIL',
+      corps: [
+        `L'employé(e) est engagé(e) à temps plein selon les horaires définis par la Direction.`,
+        `Toute heure supplémentaire fera l'objet d'une compensation définie en accord`,
+        `avec la Direction du Domaine.`,
+      ]
+    },
+    {
+      titre: 'ARTICLE 4 — CONFIDENTIALITÉ',
+      corps: [
+        `L'employé(e) s'engage à garder strictement confidentielles toutes informations`,
+        `relatives aux activités, clients, recettes et procédés du Domaine Pellegrini.`,
+        `Toute divulgation non autorisée entraînera une rupture immédiate du présent contrat.`,
+      ]
+    },
+    {
+      titre: 'ARTICLE 5 — LOYAUTÉ ET RESPECT',
+      corps: [
+        `L'employé(e) s'engage à représenter dignement le Domaine Pellegrini,`,
+        `à respecter la hiérarchie et les valeurs de la Famille Pellegrini,`,
+        `et à agir en toute circonstance dans l'intérêt du Domaine.`,
+      ]
+    },
+  ];
+
+  articles.forEach(art => {
+    if (y > 255) return; // sécurité dépassement page
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...gold);
+    doc.text(art.titre, margin, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...light);
+    art.corps.forEach(l => { doc.text(l, margin + 3, y); y += 4.5; });
+    y += 4;
+  });
+
+  // ── SIGNATURES ──
+  y = Math.max(y + 4, 245);
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, W - margin, y);
+  y += 7;
+
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...mid);
+  doc.text(`Fait à Los Santos, le ${dateStr}`, W / 2, y, { align: 'center' });
+  y += 8;
+
+  // Deux blocs signature
+  const sigY = y;
+  // Employeur
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...cream);
+  doc.text('L\'Employeur', margin + 15, sigY, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...mid);
+  doc.setFontSize(7);
+  doc.text('Giovanni Pellegrini', margin + 15, sigY + 5, { align: 'center' });
+  doc.text('', margin + 15, sigY + 9, { align: 'center' });
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.3);
+  doc.line(margin, sigY + 14, margin + 30, sigY + 14);
+
+  // Employé
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...cream);
+  doc.text('L\'Employé(e)', W - margin - 15, sigY, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...mid);
+  doc.setFontSize(7);
+  doc.text(emp.name, W - margin - 15, sigY + 5, { align: 'center' });
+  doc.text(ROLE_LABELS[emp.role]||emp.role, W - margin - 15, sigY + 9, { align: 'center' });
+  doc.setDrawColor(...gold);
+  doc.line(W - margin - 30, sigY + 14, W - margin, sigY + 14);
+
+  // Pied
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...mid);
+  doc.text('Document officiel — Domaine Pellegrini S.A.R.L. — Usage interne RP', W / 2, 287, { align: 'center' });
+
+  const safeName = emp.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+  doc.save(`contrat_${safeName}_${dateStr.replace(/\//g,'-')}.pdf`);
+}
 
 async function fireEmployee(id) {
   if (!confirm('Confirmer le licenciement de cet employé ?')) return;
@@ -2231,7 +2508,10 @@ function renderEmployees() {
         <div style="font-size:12px; color:var(--text-light);">Engagé le ${new Date(e.hiredDate).toLocaleDateString('fr-FR')}</div>
         <div class="emp-footer">
           <span class="emp-salary">$${(e.salary||0).toLocaleString()}<span style="font-size:12px; color:var(--text-light)">/sem.</span></span>
-          ${STATE.role === 'patron' ? `<button class="btn-danger" onclick="fireEmployee('${e.id}')">Licencier</button>` : '<span class="tag tag-green">Actif</span>'}
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn-secondary" style="padding:6px 10px; font-size:10px;" onclick="generateContratById('${e.id}')">📄 Contrat</button>
+            ${STATE.role === 'patron' ? `<button class="btn-danger" onclick="fireEmployee('${e.id}')">Licencier</button>` : '<span class="tag tag-green">Actif</span>'}
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -2243,11 +2523,16 @@ function renderEmployees() {
 function renderPrices() {
   const el = document.getElementById('priceList');
   if (!el) return;
-  el.innerHTML = Object.entries(STATE.prices).map(([k, v]) => `
-    <div style="border-bottom:1px solid rgba(201,168,76,0.1); padding:20px 0;">
+  const entries = Object.entries(STATE.prices);
+  if (entries.length === 0) {
+    el.innerHTML = '<div class="empty-state"><p>Aucun produit sur la carte.</p></div>';
+    return;
+  }
+  el.innerHTML = entries.map(([k, v]) => `
+    <div style="border-bottom:1px solid rgba(201,168,76,0.1); padding:20px 0; position:relative;">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
         <div>
-          <label class="form-label">Nom du vin</label>
+          <label class="form-label">Nom du produit</label>
           <input type="text" class="price-input" style="width:100%; font-family:'Cormorant Garamond',serif; font-size:15px; text-align:left;"
             data-key="${k}" data-field="name" value="${v.name}">
         </div>
@@ -2257,7 +2542,7 @@ function renderPrices() {
             data-key="${k}" data-field="vintage" value="${v.vintage}">
         </div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr 2fr; gap:12px; align-items:end;">
+      <div style="display:grid; grid-template-columns:1fr 1fr 2fr auto; gap:12px; align-items:end;">
         <div>
           <label class="form-label">Prix au Verre ($)</label>
           <input type="number" class="price-input" style="width:100%" data-key="${k}" data-field="priceGlass" value="${v.priceGlass||0}" min="0">
@@ -2269,6 +2554,9 @@ function renderPrices() {
         <div>
           <label class="form-label">Description</label>
           <input type="text" class="price-input" style="width:100%; font-size:13px; text-align:left;" data-key="${k}" data-field="desc" value="${v.desc}">
+        </div>
+        <div style="padding-bottom:2px;">
+          <button class="btn-danger" onclick="deleteProduct('${k}')" title="Supprimer ce produit">✕ Retirer</button>
         </div>
       </div>
     </div>
@@ -2286,6 +2574,62 @@ async function savePrices() {
   await savePricesDB();
   renderPublicWines();
   showToast('Carte des vins mise à jour.', true);
+}
+
+async function addProduct() {
+  const name = document.getElementById('newProdName').value.trim();
+  const vintage = document.getElementById('newProdVintage').value.trim() || 'N/V';
+  const priceGlass = parseFloat(document.getElementById('newProdGlass').value) || 0;
+  const priceBottle = parseFloat(document.getElementById('newProdBottle').value) || 0;
+  const desc = document.getElementById('newProdDesc').value.trim() || '';
+
+  if (!name) { showToast('Veuillez entrer un nom de produit.', false); return; }
+
+  // Générer une clé unique à partir du nom
+  const key = name.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) + '_' + Date.now().toString().slice(-4);
+
+  const newProd = { name, vintage, priceGlass, priceBottle, desc };
+  STATE.prices[key] = newProd;
+
+  // Sauvegarder dans Supabase
+  const { error } = await sb.from('prices').insert({
+    product_key: key, name, price_glass: priceGlass,
+    price_bottle: priceBottle, vintage, description: desc
+  });
+  if (error) {
+    delete STATE.prices[key];
+    showToast('Erreur lors de l\'ajout du produit.', false);
+    return;
+  }
+
+  // Reset formulaire
+  document.getElementById('newProdName').value = '';
+  document.getElementById('newProdVintage').value = '';
+  document.getElementById('newProdGlass').value = '';
+  document.getElementById('newProdBottle').value = '';
+  document.getElementById('newProdDesc').value = '';
+
+  renderPrices();
+  renderPublicWines();
+  showToast(`"${name}" ajouté à la carte.`, true);
+}
+
+async function deleteProduct(key) {
+  const prod = STATE.prices[key];
+  if (!prod) return;
+  if (!confirm(`Retirer "${prod.name}" de la carte ?`)) return;
+
+  const { error } = await sb.from('prices').delete().eq('product_key', key);
+  if (error) { showToast('Erreur lors de la suppression.', false); return; }
+
+  delete STATE.prices[key];
+  renderPrices();
+  renderPublicWines();
+  showToast(`"${prod.name}" retiré de la carte.`, true);
 }
 
 // =============================================
@@ -2396,39 +2740,161 @@ function renderRecap() {
 
 function exportRecap() {
   const { totalIn, totalOut, balance } = computeStats();
-  const lines = [
-    '========================================',
-    '   DOMAINE PELLEGRINI — BILAN OFFICIEL',
-    '========================================',
-    `Date : ${new Date().toLocaleString('fr-FR')}`,
-    `Généré par : ${STATE.user}`,
-    '',
-    `Employés : ${STATE.employees.length}`,
-    `Masse salariale : $${STATE.employees.reduce((s,e)=>s+(e.salary||0),0).toLocaleString()}/sem.`,
-    `Transactions : ${STATE.transactions.length}`,
-    '',
-    `Total Entrées  : +$${totalIn.toLocaleString()}`,
-    `Total Sorties  : -$${totalOut.toLocaleString()}`,
-    `Résultat Net   : ${balance>=0?'+':''}$${balance.toLocaleString()}`,
-    '',
-    '--- DÉTAIL TRANSACTIONS ---',
-    ...STATE.transactions.map(t => `[${formatDate(t.date)}] ${t.type==='entree'?'ENTRÉE':'SORTIE'} | ${CAT_LABELS[t.cat]} | ${t.type==='entree'?'+':'-'}$${t.amount} | ${t.note}`),
-    '',
-    '--- PERSONNEL ---',
-    ...STATE.employees.map(e => `${e.name} | ${ROLE_LABELS[e.role]} | $${e.salary}/sem.`),
-    '',
-    '========================================',
-    '  Document officiel — Usage fiscal/RP',
-    '========================================'
-  ];
-  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `pellegrini_bilan_${new Date().toISOString().slice(0,10)}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Rapport exporté avec succès.', true);
+  const totalSalaries = STATE.employees.reduce((s,e)=>s+(e.salary||0),0);
+  const date = new Date().toLocaleDateString('fr-FR', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  const filename = `pellegrini_bilan_${new Date().toISOString().slice(0,10)}.pdf`;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210; // largeur A4
+  const margin = 20;
+  let y = 0;
+
+  // ── Fonctions utilitaires ──
+  const gold = [201, 168, 76];
+  const dark = [45, 9, 18];
+  const cream = [245, 239, 230];
+  const green = [80, 160, 80];
+  const red = [180, 70, 70];
+  const gray = [120, 90, 100];
+
+  function rect(x, ry, w, h, color) {
+    doc.setFillColor(...color);
+    doc.rect(x, ry, w, h, 'F');
+  }
+
+  function line(ry, color = [201,168,76], opacity = 0.3) {
+    doc.setDrawColor(...color);
+    doc.setLineWidth(0.3);
+    doc.setGState(new doc.GState({ opacity }));
+    doc.line(margin, ry, W - margin, ry);
+    doc.setGState(new doc.GState({ opacity: 1 }));
+  }
+
+  function text(str, x, ry, size, color, align = 'left', style = 'normal') {
+    doc.setFontSize(size);
+    doc.setTextColor(...color);
+    doc.setFont('helvetica', style);
+    doc.text(str, x, ry, { align });
+  }
+
+  function rowLine(label, value, ry, valColor = cream) {
+    text(label, margin, ry, 10, gray);
+    text(value, W - margin, ry, 10, valColor, 'right', 'bold');
+    line(ry + 2, [200,200,200], 0.15);
+    return ry + 8;
+  }
+
+  // ── FOND ──
+  rect(0, 0, W, 297, dark);
+  // Bande déco top
+  rect(0, 0, W, 2, gold);
+  rect(0, 295, W, 2, gold);
+
+  // ── EN-TÊTE ──
+  y = 18;
+  // Ornement
+  text('✦  DOCUMENT OFFICIEL  ✦', W/2, y, 7, gold, 'center', 'normal');
+  y += 8;
+  text('DOMAINE PELLEGRINI', W/2, y, 22, gold, 'center', 'bold');
+  y += 8;
+  text('Los Santos · Grand Cru Classé · Fondé en 1987', W/2, y, 9, gray, 'center', 'italic');
+  y += 6;
+  line(y, gold, 0.5);
+  y += 4;
+  text('BILAN FINANCIER', W/2, y, 11, cream, 'center', 'bold');
+  y += 5;
+  text(date, W/2, y, 8, gray, 'center', 'italic');
+  text(`Généré par : ${STATE.user}`, W/2, y + 5, 8, gray, 'center', 'italic');
+  y += 14;
+  line(y, gold, 0.5);
+  y += 10;
+
+  // ── INFOS GÉNÉRALES ──
+  text('INFORMATIONS GÉNÉRALES', margin, y, 9, gold, 'left', 'bold');
+  y += 6;
+  y = rowLine("Nombre d'employés", `${STATE.employees.length}`, y);
+  y = rowLine('Masse salariale hebdomadaire', `$${totalSalaries.toLocaleString()}`, y);
+  y = rowLine('Nombre de transactions', `${STATE.transactions.length}`, y);
+  y += 4;
+
+  // ── ENTRÉES ──
+  rect(margin, y, W - margin*2, 7, [30, 80, 30]);
+  text('ENTRÉES', margin + 3, y + 5, 9, [180,255,180], 'left', 'bold');
+  y += 10;
+
+  const byCategory = {};
+  STATE.transactions.forEach(t => {
+    if (!byCategory[t.cat]) byCategory[t.cat] = { in: 0, out: 0 };
+    if (t.type === 'entree') byCategory[t.cat].in += t.amount;
+    else byCategory[t.cat].out += t.amount;
+  });
+
+  Object.entries(byCategory).filter(([,v])=>v.in>0).forEach(([k,v]) => {
+    y = rowLine(CAT_LABELS[k]||k, `+$${v.in.toLocaleString()}`, y, [120,210,120]);
+  });
+
+  // Total entrées
+  rect(margin, y, W - margin*2, 8, [20,60,20]);
+  text('TOTAL ENTRÉES', margin + 3, y + 5.5, 10, [180,255,180], 'left', 'bold');
+  text(`+$${totalIn.toLocaleString()}`, W - margin - 3, y + 5.5, 12, [120,230,120], 'right', 'bold');
+  y += 13;
+
+  // ── SORTIES ──
+  rect(margin, y, W - margin*2, 7, [80, 20, 20]);
+  text('SORTIES', margin + 3, y + 5, 9, [255,180,180], 'left', 'bold');
+  y += 10;
+
+  Object.entries(byCategory).filter(([,v])=>v.out>0).forEach(([k,v]) => {
+    y = rowLine(CAT_LABELS[k]||k, `-$${v.out.toLocaleString()}`, y, [220,100,100]);
+  });
+
+  if (!Object.values(byCategory).some(v=>v.out>0)) {
+    text('Aucune sortie enregistrée.', margin, y, 9, gray, 'left', 'italic');
+    y += 8;
+  }
+
+  // Total sorties
+  rect(margin, y, W - margin*2, 8, [60, 15, 15]);
+  text('TOTAL SORTIES', margin + 3, y + 5.5, 10, [255,180,180], 'left', 'bold');
+  text(`-$${totalOut.toLocaleString()}`, W - margin - 3, y + 5.5, 12, [220,100,100], 'right', 'bold');
+  y += 15;
+
+  // ── RÉSULTAT NET ──
+  const balColor = balance >= 0 ? [60,160,60] : [160,40,40];
+  const balBg = balance >= 0 ? [15,50,15] : [50,10,10];
+  rect(margin, y, W - margin*2, 14, balBg);
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.5);
+  doc.rect(margin, y, W - margin*2, 14);
+  text('RÉSULTAT NET', margin + 4, y + 6, 11, gold, 'left', 'bold');
+  text(`${balance>=0?'+':''}$${balance.toLocaleString()}`, W - margin - 4, y + 9, 16, balColor, 'right', 'bold');
+  y += 20;
+
+  // ── PERSONNEL ──
+  if (STATE.employees.length > 0 && y < 240) {
+    line(y, gold, 0.3);
+    y += 6;
+    text('PERSONNEL', margin, y, 9, gold, 'left', 'bold');
+    y += 6;
+    STATE.employees.forEach(e => {
+      if (y > 270) return;
+      text(`${e.name}`, margin, y, 9, cream);
+      text(`${ROLE_LABELS[e.role]||e.role}`, margin + 60, y, 9, gray);
+      text(`$${(e.salary||0).toLocaleString()}/sem.`, W - margin, y, 9, gold, 'right');
+      y += 6;
+    });
+  }
+
+  // ── PIED DE PAGE ──
+  y = 280;
+  line(y, gold, 0.4);
+  y += 5;
+  text('Document officiel — Usage fiscal / RP — Domaine Pellegrini, Los Santos', W/2, y, 7, gray, 'center', 'italic');
+  text('✦', W/2, y + 5, 8, gold, 'center');
+
+  doc.save(filename);
+  showToast('PDF exporté avec succès.', true);
 }
 
 // =============================================
